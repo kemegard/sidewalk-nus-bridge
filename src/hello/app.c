@@ -76,7 +76,7 @@ static void on_sidewalk_msg_received(const struct sid_msg_desc *msg_desc, const 
 #endif
 
 #if defined(CONFIG_SID_END_DEVICE_NUS_BRIDGE)
-	nus_bridge_sid_downlink((const uint8_t *)msg->data, msg->size);
+	nus_bridge_sid_msg_received(msg_desc, msg);
 #endif
 
 #ifdef CONFIG_SID_END_DEVICE_ECHO_MSGS
@@ -123,6 +123,9 @@ static void on_sidewalk_msg_sent(const struct sid_msg_desc *msg_desc, void *cont
 	LOG_INF("Message send success");
 	printk(JSON_NEW_LINE(JSON_OBJ(JSON_NAME(
 		"on_msg_sent", JSON_OBJ(JSON_VAL_sid_msg_desc("sid_msg_desc", msg_desc, 0))))));
+#if defined(CONFIG_SID_END_DEVICE_NUS_BRIDGE)
+	nus_bridge_sid_msg_sent(msg_desc);
+#endif
 #if defined(CONFIG_STATE_NOTIFIER)
 	application_state_sending(&global_state_notifier, false);
 #endif
@@ -136,6 +139,9 @@ static void on_sidewalk_send_error(sid_error_t error, const struct sid_msg_desc 
 		"on_send_error",
 		JSON_OBJ(JSON_LIST_2(JSON_VAL_sid_error_t("error", error),
 				     JSON_VAL_sid_msg_desc("sid_msg_desc", msg_desc, 0)))))));
+#if defined(CONFIG_SID_END_DEVICE_NUS_BRIDGE)
+	nus_bridge_sid_send_error(error, msg_desc);
+#endif
 #if defined(CONFIG_STATE_NOTIFIER)
 	application_state_sending(&global_state_notifier, false);
 #endif

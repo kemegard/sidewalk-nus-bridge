@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/gatt.h>
+#include <sid_api.h>
 
 /**
  * @brief BT identity used by the NUS link.
@@ -27,12 +28,29 @@
 int nus_bridge_start(void);
 
 /**
- * @brief Forward a Sidewalk downlink to the NUS peer and the NUS UART.
+ * @brief Sidewalk on_msg_received hook.
+ * Completes a pending !ping on its ack, forwards other downlinks to the NUS peer and the NUS UART.
+ * Call from the Sidewalk thread.
  *
- * @param data message payload
- * @param len payload length
+ * @param msg_desc message descriptor
+ * @param msg message
  */
-void nus_bridge_sid_downlink(const uint8_t *data, size_t len);
+void nus_bridge_sid_msg_received(const struct sid_msg_desc *msg_desc, const struct sid_msg *msg);
+
+/**
+ * @brief Sidewalk on_msg_sent hook, reports !ping progress. Call from the Sidewalk thread.
+ *
+ * @param msg_desc message descriptor
+ */
+void nus_bridge_sid_msg_sent(const struct sid_msg_desc *msg_desc);
+
+/**
+ * @brief Sidewalk on_send_error hook, reports a failed !ping. Call from the Sidewalk thread.
+ *
+ * @param error send error
+ * @param msg_desc message descriptor
+ */
+void nus_bridge_sid_send_error(sid_error_t error, const struct sid_msg_desc *msg_desc);
 
 /**
  * @brief check if attr is a NUS characteristic value

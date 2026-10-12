@@ -8,6 +8,9 @@
 #include <sidewalk.h>
 #include <bt_app_callbacks.h>
 #include <sid_hal_memory_ifc.h>
+#include <app_mfg_config.h>
+#include <json_printer/sidTypes2str.h>
+#include <stdarg.h>
 #include <string.h>
 
 #include <bluetooth/services/nus.h>
@@ -30,9 +33,10 @@ LOG_MODULE_REGISTER(nus_bridge, CONFIG_SIDEWALK_LOG_LEVEL);
 #define UART_TX_BUF_SIZE 1024
 #define UART_RX_QUEUE_LEN 4
 
-#define TAG_PHONE_TO_SID "[nus->sidewalk] "
+#define TAG_NUS_RX "[nus] "
 #define TAG_SID_TO_PHONE "[sidewalk->nus] "
 #define TAG_UART_TO_PHONE "[uart->nus] "
+#define TAG_CMD "[cmd] "
 
 static const struct device *const uart = DEVICE_DT_GET(NUS_UART_NODE);
 
@@ -269,20 +273,189 @@ BT_CONN_CB_DEFINE(nus_bridge_conn_callbacks) = {
 	.recycled = recycled,
 };
 
-/* Data paths */
+/* Local commands, all handlers run on the Sidewalk thread */
 
-static void free_uplink_ctx(void *ctx)
+#define CMD_REPLY_MAX 160
+#define PING_PAYLOAD "ping"
+#define PING_RETRIES 3
+#define PING_TTL_S 60
+
+/* Id of the !ping message waiting for its ack, 0 if none. Sidewalk thread only. */
+static uint16_t ping_msg_id;
+
+static void cmd_reply(const char *fmt, ...)
 {
-	sidewalk_msg_t *uplink = (sidewalk_msg_t *)ctx;
+	char buf[CMD_REPLY_MAX];
+	va_list args;
 
-	if (uplink == NULL) {
+	va_start(args, fmt);
+	int len = vsnprintk(buf, sizeof(buf), fmt, args);
+	va_end(args);
+	len = MIN(len, (int)sizeof(buf) - 1);
+
+	uart_write_tagged(TAG_CMD, (const uint8_t *)buf, len);
+
+	struct bt_conn *conn = nus_conn_get();
+
+	if (!conn) {
 		return;
 	}
-	if (uplink->msg.data) {
-		sid_hal_free(uplink->msg.data);
+	int err = nus_send_all(conn, (const uint8_t *)buf, len);
+
+	bt_conn_unref(conn);
+	if (err) {
+		LOG_WRN("NUS reply failed (err %d)", err);
 	}
-	sid_hal_free(uplink);
 }
+
+static const char *link_up_str(const struct sid_status *st, uint32_t link)
+{
+	return (st->detail.link_status_mask & link) ? "up" : "down";
+}
+
+static const char *sid_state_str(enum sid_state state)
+{
+	switch (state) {
+	case SID_STATE_READY:
+		return "ready";
+	case SID_STATE_NOT_READY:
+		return "not ready";
+	case SID_STATE_ERROR:
+		return "error";
+	case SID_STATE_SECURE_CHANNEL_READY:
+		return "secure channel ready";
+	default:
+		return "unknown";
+	}
+}
+
+/* Explains why Sidewalk has no handle; false if it is running. */
+static bool cmd_not_started(sidewalk_ctx_t *sid, const char *cmd)
+{
+	if (sid->handle != NULL) {
+		return false;
+	}
+	cmd_reply("%s: sidewalk not started (%s)", cmd,
+		  app_mfg_cfg_is_empty() ? "not provisioned, see log for the guide" :
+					   "init failed, see log");
+	return true;
+}
+
+static void cmd_status(sidewalk_ctx_t *sid)
+{
+	if (cmd_not_started(sid, "status")) {
+		return;
+	}
+
+	struct sid_status st = sid->last_status;
+	sid_error_t e = sid_get_status(sid->handle, &st);
+
+	if (e) {
+		LOG_WRN("sid_get_status err %d, using last status", (int)e);
+	}
+
+	cmd_reply("status: %s, %sregistered, time %s, BLE %s, FSK %s, LoRa %s",
+		  sid_state_str(st.state),
+		  st.detail.registration_status == SID_STATUS_REGISTERED ? "" : "not ",
+		  st.detail.time_sync_status == SID_STATUS_TIME_SYNCED ? "synced" : "not synced",
+		  link_up_str(&st, SID_LINK_TYPE_1), link_up_str(&st, SID_LINK_TYPE_2),
+		  link_up_str(&st, SID_LINK_TYPE_3));
+}
+
+static void cmd_mtu(sidewalk_ctx_t *sid)
+{
+	static const struct {
+		uint32_t link;
+		const char *name;
+	} links[] = {
+		{ SID_LINK_TYPE_1, "BLE" },
+		{ SID_LINK_TYPE_2, "FSK" },
+		{ SID_LINK_TYPE_3, "LoRa" },
+	};
+
+	if (cmd_not_started(sid, "mtu")) {
+		return;
+	}
+
+	char buf[CMD_REPLY_MAX];
+	int pos = 0;
+
+	for (size_t i = 0; i < ARRAY_SIZE(links); i++) {
+		if (!(sid->config.link_mask & links[i].link)) {
+			continue;
+		}
+		size_t mtu = 0;
+		sid_error_t e = sid_get_mtu(sid->handle, links[i].link, &mtu);
+
+		if (e) {
+			pos += snprintk(buf + pos, sizeof(buf) - pos, " %s n/a (%s)", links[i].name,
+					SID_ERROR_T_STR(e));
+		} else {
+			pos += snprintk(buf + pos, sizeof(buf) - pos, " %s %u bytes", links[i].name,
+					(unsigned)mtu);
+		}
+		pos = MIN(pos, (int)sizeof(buf) - 1);
+	}
+
+	cmd_reply("mtu:%s", pos ? buf : " no link enabled");
+}
+
+static void cmd_ping(sidewalk_ctx_t *sid)
+{
+	if (cmd_not_started(sid, "ping")) {
+		return;
+	}
+	if (ping_msg_id) {
+		cmd_reply("ping: still waiting for ack of message %u", ping_msg_id);
+		return;
+	}
+
+	struct sid_msg msg = {
+		.data = (void *)PING_PAYLOAD,
+		.size = sizeof(PING_PAYLOAD) - 1,
+	};
+	struct sid_msg_desc desc = {
+		.type = SID_MSG_TYPE_NOTIFY,
+		.link_type = SID_LINK_TYPE_ANY,
+		.link_mode = SID_LINK_MODE_CLOUD,
+		.msg_desc_attr.tx_attr = {
+			.request_ack = true,
+			.num_retries = PING_RETRIES,
+			.ttl_in_seconds = PING_TTL_S,
+		},
+	};
+	sid_error_t e = sid_put_msg(sid->handle, &msg, &desc);
+
+	if (e) {
+		cmd_reply("ping: send failed %d (%s)", (int)e, SID_ERROR_T_STR(e));
+		return;
+	}
+
+	ping_msg_id = desc.id;
+	cmd_reply("ping: message %u queued, waiting for ack (up to %u s)", desc.id, PING_TTL_S);
+}
+
+#define CMD_LIST "!status !mtu !ping !help"
+
+static void cmd_event(sidewalk_ctx_t *sid, void *ctx)
+{
+	const char *cmd = (const char *)ctx;
+
+	if (strcmp(cmd, "!status") == 0) {
+		cmd_status(sid);
+	} else if (strcmp(cmd, "!mtu") == 0) {
+		cmd_mtu(sid);
+	} else if (strcmp(cmd, "!ping") == 0) {
+		cmd_ping(sid);
+	} else if (strcmp(cmd, "!help") == 0) {
+		cmd_reply("commands: " CMD_LIST);
+	} else {
+		/* Everything else is ignored, nothing is sent to Sidewalk. */
+		cmd_reply("ignored, allowed commands: " CMD_LIST);
+	}
+}
+
+/* Data paths */
 
 static void nus_received(struct bt_conn *conn, const uint8_t *const data, uint16_t len)
 {
@@ -290,34 +463,28 @@ static void nus_received(struct bt_conn *conn, const uint8_t *const data, uint16
 		return;
 	}
 
-	LOG_INF("NUS rx %u bytes, send to Sidewalk", len);
-	uart_write_tagged(TAG_PHONE_TO_SID, data, len);
+	uart_write_tagged(TAG_NUS_RX, data, len);
 
-	sidewalk_msg_t *uplink = sid_hal_malloc(sizeof(sidewalk_msg_t));
+	/* Drop trailing line endings and spaces added by terminal apps. */
+	while (len > 0 && (data[len - 1] == '\r' || data[len - 1] == '\n' || data[len - 1] == ' ')) {
+		len--;
+	}
 
-	if (!uplink) {
-		LOG_ERR("Failed to alloc memory for message context");
+	char *cmd = sid_hal_malloc(len + 1);
+
+	if (!cmd) {
+		LOG_ERR("Failed to alloc memory for command");
 		return;
 	}
-	memset(uplink, 0x0, sizeof(*uplink));
+	memcpy(cmd, data, len);
+	cmd[len] = '\0';
 
-	uplink->msg.size = len;
-	uplink->msg.data = sid_hal_malloc(uplink->msg.size);
-	if (!uplink->msg.data) {
-		sid_hal_free(uplink);
-		LOG_ERR("Failed to allocate memory for message data");
-		return;
-	}
-	memcpy(uplink->msg.data, data, uplink->msg.size);
+	LOG_INF("NUS rx %u bytes", len);
 
-	uplink->desc.type = SID_MSG_TYPE_NOTIFY;
-	uplink->desc.link_type = SID_LINK_TYPE_ANY;
-	uplink->desc.link_mode = SID_LINK_MODE_CLOUD;
-
-	int err = sidewalk_event_send(sidewalk_event_send_msg, uplink, free_uplink_ctx);
+	int err = sidewalk_event_send(cmd_event, cmd, sid_hal_free);
 
 	if (err) {
-		free_uplink_ctx(uplink);
+		sid_hal_free(cmd);
 		LOG_ERR("Send event err %d", err);
 	}
 }
@@ -351,7 +518,7 @@ static void uart_rx_work_handler(struct k_work *work)
 	}
 }
 
-void nus_bridge_sid_downlink(const uint8_t *data, size_t len)
+static void sid_downlink(const uint8_t *data, size_t len)
 {
 	uart_write_tagged(TAG_SID_TO_PHONE, data, len);
 
@@ -367,6 +534,36 @@ void nus_bridge_sid_downlink(const uint8_t *data, size_t len)
 	bt_conn_unref(conn);
 	if (err) {
 		LOG_WRN("NUS send failed (err %d)", err);
+	}
+}
+
+void nus_bridge_sid_msg_received(const struct sid_msg_desc *msg_desc, const struct sid_msg *msg)
+{
+	/* Acks carry no payload, they only complete a pending !ping. */
+	if (msg_desc->msg_desc_attr.rx_attr.is_msg_ack) {
+		if (ping_msg_id && msg_desc->id == ping_msg_id) {
+			ping_msg_id = 0;
+			cmd_reply("ping: ack received for message %u", msg_desc->id);
+		}
+		return;
+	}
+
+	sid_downlink((const uint8_t *)msg->data, msg->size);
+}
+
+void nus_bridge_sid_msg_sent(const struct sid_msg_desc *msg_desc)
+{
+	if (ping_msg_id && msg_desc->id == ping_msg_id) {
+		cmd_reply("ping: message %u sent, waiting for ack", msg_desc->id);
+	}
+}
+
+void nus_bridge_sid_send_error(sid_error_t error, const struct sid_msg_desc *msg_desc)
+{
+	if (ping_msg_id && msg_desc->id == ping_msg_id) {
+		ping_msg_id = 0;
+		cmd_reply("ping: message %u failed %d (%s)", msg_desc->id, (int)error,
+			  SID_ERROR_T_STR(error));
 	}
 }
 

@@ -1,9 +1,10 @@
 """Host-side check of the sidewalk_nus bridge using the PC Bluetooth adapter.
 
-python nus_test.py --uart COM152 [--console COM151] [--name Sidewalk_NUS]
+python nus_test.py --uart COM152 [--name Sidewalk_NUS] [--provisioned]
 
-1. NUS write   -> mirrored on the NUS UART as "[nus->sidewalk] ..." (and queued as Sidewalk uplink)
-2. UART line   -> NUS notification, mirrored as "[uart->nus] ..."
+1. UART line   -> NUS notification, mirrored as "[uart->nus] ..."
+2. NUS input   -> !help/!status/!mtu/!ping answered; anything else answered with the command list.
+                  Input mirrored as "[nus] ...", replies as "[cmd] ..."
 3. Sidewalk (AMA) and SMP characteristics must be rejected on the NUS link (authorization)
 4. After disconnect the device must advertise again
 """
@@ -58,13 +59,7 @@ async def main(args):
         check("connected", client.is_connected)
         await client.start_notify(NUS_TX, lambda _, data: notifications.append(bytes(data)))
 
-        # 1. NUS -> UART mirror (+ Sidewalk uplink attempt)
-        msg = b"hello from pc"
-        await client.write_gatt_char(NUS_RX, msg, response=True)
-        ok, buf = read_uart_until(uart, b"[nus->sidewalk] " + msg)
-        check("NUS write mirrored on NUS UART", ok, buf.decode(errors="replace").strip())
-
-        # 2. UART -> NUS
+        # 1. UART -> NUS
         line = b"ping from uart"
         uart.write(line + b"\r\n")
         end = time.time() + 3
@@ -73,6 +68,31 @@ async def main(args):
         check("UART line notified over NUS", line in notifications, repr(notifications))
         ok, buf = read_uart_until(uart, b"[uart->nus] " + line)
         check("UART line mirrored on NUS UART", ok)
+
+        # 2. NUS input: only commands are accepted, anything else gets the command list
+        ignored = b"ignored, allowed commands: !status !mtu !ping !help"
+        expected = {
+            b"!help": b"commands: !status !mtu !ping !help",
+            b"!status": b"status:" if args.provisioned else b"status: sidewalk not started",
+            b"!mtu": b"mtu:" if args.provisioned else b"mtu: sidewalk not started",
+            b"!ping": b"ping:" if args.provisioned else b"ping: sidewalk not started",
+            b"!bogus": ignored,
+            b"hello from pc": ignored,
+            b"": ignored,
+        }
+        for cmd, reply in expected.items():
+            label = repr(cmd.decode())
+            notifications.clear()
+            uart.reset_input_buffer()
+            await client.write_gatt_char(NUS_RX, cmd + b"\r\n", response=True)
+            end = time.time() + 3
+            while time.time() < end and not any(n.startswith(reply) for n in notifications):
+                await asyncio.sleep(0.1)
+            got = b"".join(notifications)
+            check(f"{label} replied over NUS", any(n.startswith(reply) for n in notifications),
+                  got.decode(errors="replace"))
+            ok, buf = read_uart_until(uart, b"[cmd] " + reply, timeout=1.0)
+            check(f"{label} mirrored on NUS UART", ok and b"[nus] " + cmd in buf)
 
         # 3. Sidewalk / SMP attributes are blocked on the NUS link
         for label, uuid in (("Sidewalk AMA write", AMA_WRITE), ("SMP", SMP_CHAR)):
@@ -97,6 +117,8 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--uart", required=True, help="COM port of the NUS UART (uart30)")
     p.add_argument("--name", default="Sidewalk_NUS")
+    p.add_argument("--provisioned", action="store_true",
+                   help="device has Sidewalk credentials (expect real !status/!mtu/!ping replies)")
     a = p.parse_args()
     asyncio.run(main(a))
     failed = [n for n, ok in results if not ok]

@@ -37,9 +37,11 @@ config SID_END_DEVICE_NUS_BRIDGE
 	select RING_BUFFER
 	help
 	  Advertise the Nordic UART Service on the default BT identity next to Sidewalk.
-	  Data written by the NUS peer is sent as a Sidewalk uplink, Sidewalk downlinks
-	  are notified to the NUS peer. Lines received on the nordic,nus-uart UART are
-	  sent to the NUS peer, and all bridged traffic is mirrored to that UART.
+	  The NUS peer can only send the commands !status, !mtu, !ping and !help,
+	  answered over NUS; any other input is ignored and answered with the list of
+	  commands. Sidewalk downlinks are notified to the NUS peer. Lines received on
+	  the nordic,nus-uart UART are sent to the NUS peer, and all NUS traffic is
+	  mirrored to that UART.
 
 if SID_END_DEVICE_NUS_BRIDGE
 
