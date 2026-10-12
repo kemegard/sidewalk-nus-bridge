@@ -1,0 +1,392 @@
+sample:
+  name: Sidewalk end device sample
+  description: Sample implementing Amazon Sidewalk End Device
+
+common:
+  sysbuild: true
+  build_only: true
+  platform_allow:
+    - nrf52840dk/nrf52840
+    - nrf54l15dk/nrf54l15/cpuapp
+    - nrf54l15dk/nrf54l15/cpuapp/ns
+    - nrf54l15dk/nrf54l10/cpuapp
+  tags:
+    - Sidewalk
+
+tests:
+  sample.sidewalk.hello.sx1262:
+    integration_platforms:
+      - nrf54l15dk/nrf54l15/cpuapp
+    extra_args:
+      - OVERLAY_CONFIG="overlay-hello.conf"
+      - SHIELD="simple_arduino_adapter;semtech_sx1262mb2cas"
+    extra_configs:
+      - CONFIG_SID_END_DEVICE_PERSISTENT_LINK_MASK=y
+      - CONFIG_SIDEWALK_FILE_TRANSFER=y
+      - CONFIG_SIDEWALK_APPLICATION_NAME="hello"
+    tags:
+      - hello
+      - sx1262
+
+  sample.sidewalk.hello.lr1110:
+    integration_platforms:
+      - nrf54l15dk/nrf54l15/cpuapp
+    build_only: false
+    extra_args:
+      - OVERLAY_CONFIG="overlay-hello.conf"
+      - SHIELD="simple_arduino_adapter;semtech_lr1110mb1xxs"
+    extra_configs:
+      - CONFIG_SID_END_DEVICE_PERSISTENT_LINK_MASK=y
+      - CONFIG_SIDEWALK_FILE_TRANSFER=y
+      - CONFIG_SIDEWALK_APPLICATION_NAME="hello"
+    harness: console
+    harness_config:
+      type: multi_line
+      regex:
+        - ".*Booting Sidewalk.*"
+    tags:
+      - hello
+      - lr1110
+
+  sample.sidewalk.hello.nrf_sidewalk_eb:
+    integration_platforms:
+      - nrf54lm20dk/nrf54lm20a/cpuapp
+    platform_exclude:
+      - nrf52840dk/nrf52840
+      - nrf54l15dk/nrf54l15/cpuapp
+      - nrf54l15dk/nrf54l15/cpuapp/ns
+      - nrf54l15dk/nrf54l10/cpuapp
+    platform_allow:
+      - nrf54lm20dk/nrf54lm20a/cpuapp
+      - nrf54lm20dk/nrf54lm20b/cpuapp
+    extra_args:
+      - OVERLAY_CONFIG="overlay-hello.conf"
+      - SHIELD="nrf_sidewalk_eb"
+    extra_configs:
+      - CONFIG_SID_END_DEVICE_PERSISTENT_LINK_MASK=y
+      - CONFIG_SIDEWALK_FILE_TRANSFER=y
+      - CONFIG_SIDEWALK_APPLICATION_NAME="hello"
+    tags:
+      - hello
+      - lr1110
+
+  sample.sidewalk.hello.release.sx1262:
+    integration_platforms:
+      - nrf54l15dk/nrf54l15/cpuapp
+    extra_args:
+      - FILE_SUFFIX=release
+      - OVERLAY_CONFIG="overlay-hello.conf"
+      - SHIELD="simple_arduino_adapter;semtech_sx1262mb2cas"
+    extra_configs:
+      - CONFIG_SID_END_DEVICE_PERSISTENT_LINK_MASK=y
+      - CONFIG_SIDEWALK_APPLICATION_NAME="hello.release"
+    tags:
+      - hello
+      - sx1262
+
+  sample.sidewalk.hello.release.lr1110:
+    integration_platforms:
+      - nrf54l15dk/nrf54l15/cpuapp
+    extra_args:
+      - FILE_SUFFIX=release
+      - OVERLAY_CONFIG="overlay-hello.conf"
+      - SHIELD="simple_arduino_adapter;semtech_lr1110mb1xxs"
+
+    extra_configs:
+      - CONFIG_SID_END_DEVICE_PERSISTENT_LINK_MASK=y
+      - CONFIG_SIDEWALK_APPLICATION_NAME="hello.release"
+    tags:
+      - hello
+      - lr1110
+
+  sample.sidewalk.hello.release.nrf_sidewalk_eb:
+    integration_platforms:
+      - nrf54lm20dk/nrf54lm20a/cpuapp
+    platform_exclude:
+      - nrf52840dk/nrf52840
+      - nrf54l15dk/nrf54l15/cpuapp
+      - nrf54l15dk/nrf54l15/cpuapp/ns
+      - nrf54l15dk/nrf54l10/cpuapp
+    platform_allow:
+      - nrf54lm20dk/nrf54lm20a/cpuapp
+      - nrf54lm20dk/nrf54lm20b/cpuapp
+    extra_args:
+      - FILE_SUFFIX=release
+      - OVERLAY_CONFIG="overlay-hello.conf"
+      - SHIELD="nrf_sidewalk_eb"
+    extra_configs:
+      - CONFIG_SID_END_DEVICE_PERSISTENT_LINK_MASK=y
+      - CONFIG_SIDEWALK_APPLICATION_NAME="hello.release"
+    tags:
+      - hello
+      - lr1110
+
+  sample.sidewalk.hello.ble_only:
+    integration_platforms:
+      - nrf54l15dk/nrf54l15/cpuapp
+    build_only: false
+    platform_allow:
+      - nrf54lv10dk/nrf54lv10a/cpuapp
+      - nrf54lm20dk/nrf54lm20a/cpuapp
+      - nrf54lm20dk/nrf54lm20b/cpuapp
+    extra_configs:
+      - CONFIG_SIDEWALK_APPLICATION_NAME="hello.ble_only"
+    harness: console
+    harness_config:
+      type: multi_line
+      regex:
+        - ".*Booting Sidewalk.*"
+    tags:
+      - hello
+      - BLE
+
+  sample.sidewalk.hello.ble_only.release:
+    integration_platforms:
+      - nrf54l15dk/nrf54l15/cpuapp
+    platform_allow:
+      - nrf54lv10dk/nrf54lv10a/cpuapp
+      - nrf54lm20dk/nrf54lm20a/cpuapp
+      - nrf54lm20dk/nrf54lm20b/cpuapp
+    extra_args: FILE_SUFFIX=release
+    extra_configs:
+      - CONFIG_SIDEWALK_APPLICATION_NAME="hello.ble_only.release"
+    tags:
+      - hello
+      - BLE
+
+  sample.sidewalk.demo.sx1262:
+    integration_platforms:
+      - nrf54l15dk/nrf54l15/cpuapp
+    extra_args:
+      - OVERLAY_CONFIG="overlay-demo.conf"
+      - SHIELD="simple_arduino_adapter;semtech_sx1262mb2cas"
+    extra_configs:
+      - CONFIG_SID_END_DEVICE_PERSISTENT_LINK_MASK=y
+      - CONFIG_SIDEWALK_APPLICATION_NAME="demo"
+    tags:
+      - demo
+      - sx1262
+
+  sample.sidewalk.demo.lr1110:
+    integration_platforms:
+      - nrf54l15dk/nrf54l15/cpuapp
+    extra_args:
+      - OVERLAY_CONFIG="overlay-demo.conf"
+      - SHIELD="simple_arduino_adapter;semtech_lr1110mb1xxs"
+    extra_configs:
+      - CONFIG_SID_END_DEVICE_PERSISTENT_LINK_MASK=y
+      - CONFIG_SIDEWALK_APPLICATION_NAME="demo"
+    tags:
+      - demo
+      - lr1110
+
+  sample.sidewalk.demo.ble_only:
+    integration_platforms:
+      - nrf54l15dk/nrf54l15/cpuapp
+    extra_args: OVERLAY_CONFIG="overlay-demo.conf"
+    extra_configs:
+      - CONFIG_SIDEWALK_APPLICATION_NAME="demo.ble_only"
+    tags:
+      - demo
+      - BLE
+
+  sample.sidewalk.dut.sx1262:
+    integration_platforms:
+      - nrf54l15dk/nrf54l15/cpuapp
+    extra_args:
+      - OVERLAY_CONFIG="overlay-dut.conf"
+      - SHIELD="simple_arduino_adapter;semtech_sx1262mb2cas"
+    extra_configs:
+      - CONFIG_SIDEWALK_APPLICATION_NAME="dut"
+    tags:
+      - cli
+      - sx1262
+
+  sample.sidewalk.dut.lr1110:
+    integration_platforms:
+      - nrf54l15dk/nrf54l15/cpuapp
+    build_only: false
+    platform_exclude:
+      - nrf54l15dk/nrf54l15/cpuapp/ns
+    extra_args:
+      - OVERLAY_CONFIG="overlay-dut.conf"
+      - SHIELD="simple_arduino_adapter;semtech_lr1110mb1xxs"
+    extra_configs:
+      - CONFIG_SIDEWALK_APPLICATION_NAME="dut"
+    harness: console
+    harness_config:
+      type: multi_line
+      regex:
+        - "uart:~\\$"
+    tags:
+      - cli
+      - lr1110
+
+  sample.sidewalk.dut.ble_only.nrf7002eb2:
+    integration_platforms:
+      - nrf54l15dk/nrf54l15/cpuapp
+    platform_exclude:
+      - nrf52840dk/nrf52840
+      - nrf54l15dk/nrf54l10/cpuapp
+      - nrf54l15dk/nrf54l15/cpuapp/ns
+    extra_args:
+      - OVERLAY_CONFIG="overlay-dut.conf"
+      - SHIELD=nrf7002eb2_nrf7000
+    extra_configs:
+      - CONFIG_SIDEWALK_APPLICATION_NAME="dut.nrf7000"
+    tags:
+      - cli
+      - nrf70
+
+  sample.sidewalk.dut.nrf7002eb2.sx1262:
+    integration_platforms:
+      - nrf54l15dk/nrf54l15/cpuapp
+    platform_exclude:
+      - nrf52840dk/nrf52840
+      - nrf54l15dk/nrf54l10/cpuapp
+      - nrf54l15dk/nrf54l15/cpuapp/ns
+    extra_args:
+      - OVERLAY_CONFIG="overlay-dut.conf"
+      - SHIELD="simple_arduino_adapter;semtech_sx1262mb2cas;nrf7002eb2_nrf7000"
+      - sid_end_device_EXTRA_DTC_OVERLAY_FILE="shields/nrf7002eb2_sx1262_nrf54l15dk.overlay"
+    extra_configs:
+      - CONFIG_SIDEWALK_APPLICATION_NAME="dut.nrf7000.sx1262"
+    tags:
+      - cli
+      - nrf70
+      - sx1262
+
+  sample.sidewalk.dut.nrf_sidewalk_eb:
+    integration_platforms:
+      - nrf54l15dk/nrf54l15/cpuapp
+    platform_exclude:
+      - nrf52840dk/nrf52840
+      - nrf54l15dk/nrf54l15/cpuapp/ns
+    platform_allow:
+      - nrf54lm20dk/nrf54lm20a/cpuapp
+      - nrf54lm20dk/nrf54lm20b/cpuapp
+    extra_args:
+      - OVERLAY_CONFIG="overlay-dut.conf"
+      - SHIELD="nrf_sidewalk_eb"
+    extra_configs:
+      - CONFIG_SIDEWALK_APPLICATION_NAME="dut"
+    tags:
+      - Sidewalk
+      - cli
+      - lr1110
+
+  sample.sidewalk.dut.ble_only:
+    integration_platforms:
+      - nrf54l15dk/nrf54l15/cpuapp
+    build_only: false
+    platform_allow:
+      - nrf54lv10dk/nrf54lv10a/cpuapp
+      - nrf54lm20dk/nrf54lm20a/cpuapp
+      - nrf54lm20dk/nrf54lm20b/cpuapp
+    extra_args: OVERLAY_CONFIG="overlay-dut.conf"
+    extra_configs:
+      - CONFIG_SIDEWALK_APPLICATION_NAME="dut.ble_only"
+    harness: console
+    harness_config:
+      type: multi_line
+      regex:
+        - "uart:~\\$"
+    tags:
+      - cli
+      - BLE
+
+  sample.sidewalk.helloPower.ble.release:
+    integration_platforms:
+      - nrf54l15dk/nrf54l15/cpuapp
+    platform_allow:
+      - nrf54lv10dk/nrf54lv10a/cpuapp
+      - nrf54lm20dk/nrf54lm20a/cpuapp
+      - nrf54lm20dk/nrf54lm20b/cpuapp
+    extra_args: FILE_SUFFIX=release
+    extra_configs:
+      - CONFIG_STATE_NOTIFIER=n
+      - CONFIG_SID_END_DEVICE_LINK_MASK_BLE=y
+      - CONFIG_SIDEWALK_APPLICATION_NAME="helloPower.release.ble"
+    tags:
+      - helloPower
+
+  sample.sidewalk.helloPower.fsk.release.sx1262:
+    integration_platforms:
+      - nrf54l15dk/nrf54l15/cpuapp
+    extra_args:
+      - FILE_SUFFIX=release
+      - SHIELD="simple_arduino_adapter;semtech_sx1262mb2cas"
+    extra_configs:
+      - CONFIG_STATE_NOTIFIER=n
+      - CONFIG_SID_END_DEVICE_LINK_MASK_FSK=y
+      - CONFIG_SIDEWALK_APPLICATION_NAME="helloPower.release.fsk"
+    tags:
+      - helloPower
+      - sx1262
+
+  sample.sidewalk.helloPower.lora.release.sx1262:
+    integration_platforms:
+      - nrf54l15dk/nrf54l15/cpuapp
+    extra_args:
+      - FILE_SUFFIX=release
+      - SHIELD="simple_arduino_adapter;semtech_sx1262mb2cas"
+    extra_configs:
+      - CONFIG_STATE_NOTIFIER=n
+      - CONFIG_SID_END_DEVICE_LINK_MASK_LORA=y
+      - CONFIG_SIDEWALK_APPLICATION_NAME="helloPower.release.lora"
+    tags:
+      - helloPower
+      - sx1262
+
+  sample.sidewalk.helloPower.fsk.release.nrf_sidewalk_eb:
+    integration_platforms:
+      - nrf54l15dk/nrf54l15/cpuapp
+    platform_exclude:
+      - nrf52840dk/nrf52840
+    platform_allow:
+      - nrf54lm20dk/nrf54lm20a/cpuapp
+      - nrf54lm20dk/nrf54lm20b/cpuapp
+    extra_args:
+      - FILE_SUFFIX=release
+      - SHIELD="nrf_sidewalk_eb"
+    extra_configs:
+      - CONFIG_STATE_NOTIFIER=n
+      - CONFIG_SID_END_DEVICE_LINK_MASK_FSK=y
+      - CONFIG_SIDEWALK_APPLICATION_NAME="helloPower.release.fsk"
+    tags:
+      - helloPower
+      - lr1110
+
+  sample.sidewalk.helloPower.lora.release.nrf_sidewalk_eb:
+    integration_platforms:
+      - nrf54l15dk/nrf54l15/cpuapp
+    platform_exclude:
+      - nrf52840dk/nrf52840
+    platform_allow:
+      - nrf54lm20dk/nrf54lm20a/cpuapp
+      - nrf54lm20dk/nrf54lm20b/cpuapp
+    extra_args:
+      - FILE_SUFFIX=release
+      - SHIELD="nrf_sidewalk_eb"
+    extra_configs:
+      - CONFIG_STATE_NOTIFIER=n
+      - CONFIG_SID_END_DEVICE_LINK_MASK_LORA=y
+      - CONFIG_SIDEWALK_APPLICATION_NAME="helloPower.release.lora"
+    tags:
+      - helloPower
+      - lr1110
+
+  sample.sidewalk.helloPower.ble_only.release:
+    integration_platforms:
+      - nrf54l15dk/nrf54l15/cpuapp
+    platform_allow:
+      - nrf54lv10dk/nrf54lv10a/cpuapp
+      - nrf54lm20dk/nrf54lm20a/cpuapp
+      - nrf54lm20dk/nrf54lm20b/cpuapp
+    extra_args: FILE_SUFFIX=release
+    extra_configs:
+      - CONFIG_STATE_NOTIFIER=n
+      - CONFIG_SIDEWALK_APPLICATION_NAME="helloPower.ble_only.release"
+    tags:
+      - helloPower
+      - BLE

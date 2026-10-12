@@ -1,0 +1,16 @@
+/*
+ * Copyright (c) 2026 Nordic Semiconductor ASA
+ *
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+ */
+
+/* Applied only for the nrf7002eb2 shield on nRF54L15 DK, see sysbuild.cmake.
+ *
+ * There the shield deletes the led1 node, because its pin becomes the SPI-CS.
+ */
+
+/ {
+	aliases {
+		/delete-property/ state-notifier-time-sync;
+	};
+};

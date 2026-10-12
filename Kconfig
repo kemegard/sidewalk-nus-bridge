@@ -1,0 +1,250 @@
+#
+# Copyright (c) 2022 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+mainmenu "Sidewalk End Device nRF Connect Application"
+
+choice SID_END_DEVICE
+	prompt "Select application variant to run"
+	default SID_END_DEVICE_HELLO
+config SID_END_DEVICE_HELLO
+	bool "Sidewalk hello world application"
+config SID_END_DEVICE_SENSOR_MONITORING
+	bool "Demo sensor monitoring application"
+	imply SIDEWALK_DEMO_PARSER
+	imply SENSOR
+	imply TEMP_NRF5
+config SID_END_DEVICE_DUT
+	bool "Device under test application"
+endchoice #SID_END_DEVICE
+
+if SID_END_DEVICE_HELLO
+
+config SID_END_DEVICE_ECHO_MSGS
+	bool "Enable message echo feature"
+	default y
+	help
+	  Echo received messages back to Sidewalk cloud.
+	  Works with GET and SET messages types.
+
+config SID_END_DEVICE_NUS_BRIDGE
+	bool "Bridge Nordic UART Service to Sidewalk"
+	select BT_NUS
+	select SERIAL
+	select UART_INTERRUPT_DRIVEN
+	select RING_BUFFER
+	help
+	  Advertise the Nordic UART Service on the default BT identity next to Sidewalk.
+	  Data written by the NUS peer is sent as a Sidewalk uplink, Sidewalk downlinks
+	  are notified to the NUS peer. Lines received on the nordic,nus-uart UART are
+	  sent to the NUS peer, and all bridged traffic is mirrored to that UART.
+
+if SID_END_DEVICE_NUS_BRIDGE
+
+config SID_END_DEVICE_NUS_BLE_NAME
+	string "NUS advertising name"
+	default "Sidewalk_NUS"
+
+config SID_END_DEVICE_NUS_UART_LINE_MAX
+	int "Max length of a UART line sent over NUS"
+	default 128
+
+endif # SID_END_DEVICE_NUS_BRIDGE
+
+endif #SID_END_DEVICE_HELLO
+
+# One more connection and advertising set for NUS. The Sidewalk add-on sets the
+# same symbols, but defaults from the application Kconfig take precedence.
+config BT_MAX_CONN
+	default 3 if SID_END_DEVICE_NUS_BRIDGE && SIDEWALK_DFU
+	default 2 if SID_END_DEVICE_NUS_BRIDGE
+
+config BT_EXT_ADV_MAX_ADV_SET
+	default 3 if SID_END_DEVICE_NUS_BRIDGE && SIDEWALK_DFU
+	default 2 if SID_END_DEVICE_NUS_BRIDGE
+
+if SID_END_DEVICE_SENSOR_MONITORING
+
+rsource "Kconfig.sensor_monitoring"
+
+endif #SID_END_DEVICE_SENSOR_MONITORING
+
+config SID_END_DEVICE_CLI
+	bool "Sidewalk CLI (DUT)"
+	imply SHELL
+	help
+	  Enables Sidewalk command line interface.
+	  The interface commands are compatible with former dut sample.
+
+if SID_END_DEVICE_CLI
+
+config SHELL_CMD_BUFF_SIZE
+	default 1024
+
+config SHELL_STACK_SIZE
+	default 8192
+
+config SHELL_BACKEND_SERIAL_TX_RING_BUFFER_SIZE
+	default 128
+
+config SHELL_BACKEND_SERIAL_RX_RING_BUFFER_SIZE
+	default 1024
+
+config SID_END_DEVICE_CLI_ALIVE_MARKER
+	bool "Alive marker"
+	help
+	    Enable alive marker that periodically prints "alive" message to log.
+	    Useful to verify that application is running and not stuck.
+
+endif # SID_END_DEVICE_CLI
+
+config SID_END_DEVICE_AUTO_START
+	default y
+	bool "Automatic Sidewalk initialization and start"
+
+config SID_END_DEVICE_AUTO_CONN_REQ
+	default y
+	bool "Automatic connection request before message send"
+
+config SID_END_DEVICE_PERSISTENT_LINK_MASK
+	bool "Persistent link mask"
+	help
+	  The Sidewalk link mask persists after a device reset
+	  but defaults after a factory reset.
+	  This could affect the flash lifespan.
+
+choice SID_END_DEVICE_LINK_MASK
+	prompt "Physical link type"
+	default SID_END_DEVICE_LINK_MASK_FSK if SIDEWALK_LINK_MASK_FSK
+	default SID_END_DEVICE_LINK_MASK_LORA if SIDEWALK_LINK_MASK_LORA
+	default SID_END_DEVICE_LINK_MASK_BLE if SIDEWALK_LINK_MASK_BLE
+	default SID_END_DEVICE_LINK_MASK_BLE
+	help
+	  Choose the default physical link type for Sidewalk connection.
+
+config SID_END_DEVICE_LINK_MASK_BLE
+	bool "Bluetooth Low Energy link"
+
+config SID_END_DEVICE_LINK_MASK_FSK
+	bool "Sub-GHz link for FSK"
+
+config SID_END_DEVICE_LINK_MASK_LORA
+	bool "Sub-GHz link for LORA"
+
+endchoice # SID_END_DEVICE_LINK_MASK
+
+config SID_END_DEVICE_EVENT_HEAP_SIZE
+	int "Heap for Sidewalk event contexts"
+	default 2048
+
+config SIDEWALK_FILE_TRANSFER
+	select EXPERIMENTAL
+	bool "Sidewalk file transfer [EXPERIMENTAL]"
+	help
+	  Add support for Sidewalk Bulk Data Transfer (SBDT)
+	  in application.
+
+if SIDEWALK_FILE_TRANSFER
+
+config SIDEWALK_FILE_TRANSFER_HEAP_SIZE
+	int "Sidewalk file transfer heap size"
+	default 10240
+	help
+	    Heap size in bytes to be allocated
+	    for Sidewalk Bulk Data Transfer (SBDT).
+
+choice SIDEWALK_FILE_TRANSFER_IMPL
+	prompt "Select which implementation of SBDT to use"
+	default SIDEWALK_FILE_TRANSFER_DFU
+
+config SIDEWALK_FILE_TRANSFER_DFU
+	bool "Sidewalk file transfer and dfu"
+	imply SIDEWALK_DFU_IMG_UTILS
+	imply DFU_MULTI_IMAGE
+	imply DFU_TARGET
+	imply DFU_TARGET_MCUBOOT
+	imply STREAM_FLASH
+	imply STREAM_FLASH_ERASE
+	help
+	    Save received data to flash. Expect CBOR manifest.
+	    Automatically reset device after file transfer.
+
+config SIDEWALK_FILE_TRANSFER_SHELL
+	bool "SBDT cli backend for file transfer"
+	imply SHELL
+	help
+	    Use shell commands to control file transfer.
+	    This implementation does not save received data,
+	    but allows user to control the sbdt behaviour from shell.
+
+endchoice
+
+config SBDT_MAX_PARALLEL_TRANSFERS
+	int "maximum number of sbdt parallel transfers"
+	default 3
+
+endif # SIDEWALK_FILE_TRANSFER
+
+config SIDEWALK_LOCATION_SHELL
+	bool "Sidewalk Location CLI"
+	depends on SID_END_DEVICE_CLI
+	help
+	    Enables Sidewalk location and dult command line interface.
+	    Provides commands for location services and unwanted location tracking.
+
+if SIDEWALK_CRYPTO
+
+choice CC3XX_LOCK_VARIANT
+	default CC3XX_ATOMIC_LOCK if SOC_NRF52840
+endchoice
+
+config PSA_WANT_ALG_SHA_512
+	default y if SOC_SERIES_NRF54LX
+
+config PSA_WANT_ALG_CHACHA20_POLY1305
+	default n
+
+config PSA_WANT_ALG_SHA_224
+	default n
+
+config PSA_WANT_ALG_SHA_384
+	default n
+
+config PSA_WANT_ALG_CBC_NO_PADDING
+	default n
+
+config PSA_WANT_ALG_CBC_PKCS7
+	default n
+
+config PSA_WANT_ALG_HKDF
+	default n
+
+config PSA_USE_CC3XX_KEY_AGREEMENT_DRIVER
+	default n if SOC_NRF52840
+
+config PSA_USE_CC3XX_ASYMMETRIC_SIGNATURE_DRIVER
+	default n if SOC_NRF52840
+
+config PSA_USE_CC3XX_ASYMMETRIC_ENCRYPTION_DRIVER
+	default n if SOC_NRF52840
+
+config PSA_USE_CC3XX_KEY_MANAGEMENT_DRIVER
+	default n if SOC_NRF52840
+
+endif #SIDEWALK_CRYPTO
+
+if SHELL
+# TODO: Remove when merged in NCS copy of sdk-zephyr https://github.com/zephyrproject-rtos/zephyr/pull/85790
+# Workaround for missing first few logs.
+config LOG_BACKEND_RTT
+	bool "Segger J-Link RTT backend"
+	depends on USE_SEGGER_RTT
+	default y if !SHELL_LOG_BACKEND
+	default n
+endif #SHELL
+
+
+
+source "Kconfig.zephyr"

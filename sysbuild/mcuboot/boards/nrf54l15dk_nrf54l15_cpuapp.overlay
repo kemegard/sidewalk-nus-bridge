@@ -1,0 +1,31 @@
+/*
+ * Copyright (c) 2024 Nordic Semiconductor ASA
+ *
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+ */
+
+#include "../../../boards/nrf54l15dk_nrf54l15_cpuapp.overlay"
+
+/ {
+	chosen {
+		zephyr,code-partition = &boot_partition;
+	};
+};
+
+&spi00 {
+	status = "disabled";
+};
+
+&spi21 {
+	status = "disabled";
+};
+
+/* NUS UART is only used by the application */
+&uart30 {
+	status = "disabled";
+};
+
+/* Secondary slot is in internal RRAM - disable external flash for MCUboot */
+&mx25r64 {
+	status = "disabled";
+};
